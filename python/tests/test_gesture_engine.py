@@ -1,7 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
+import json
 import pathlib
 import sys
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -43,6 +45,22 @@ def frame(timestamp_seconds: float, *hands: HandFeatures) -> FrameFeatures:
 
 
 class GestureEngineTests(unittest.TestCase):
+    def test_config_can_load_from_json_file(self) -> None:
+        payload = {
+            "min_tracking_confidence": 0.72,
+            "weapon_hold_seconds": 0.48,
+            "slot_mapping": {"1": 2, "2": 3},
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = pathlib.Path(temp_dir) / "gesture.json"
+            config_path.write_text(json.dumps(payload), encoding="utf-8")
+            config = GestureConfig.from_json_file(config_path)
+
+        self.assertEqual(config.min_tracking_confidence, 0.72)
+        self.assertEqual(config.weapon_hold_seconds, 0.48)
+        self.assertEqual(config.slot_mapping, {1: 2, 2: 3})
+
     def test_fire_requires_release_before_next_shot(self) -> None:
         engine = GestureEngine(GestureConfig())
         primary = hand(label="Right", trigger_curl=0.2)

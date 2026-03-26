@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR
+#if UNITY_EDITOR
 using MotionGun.Gameplay;
 using MotionGun.Runtime;
 using MotionGun.UI;
@@ -63,9 +63,12 @@ namespace MotionGun.Editor
             TMP_Text ammoLabel = CreateText(canvas.transform, "AmmoLabel", new Vector2(24f, -60f), 26f, "12 / 12", TextAlignmentOptions.TopLeft);
             TMP_Text statusLabel = CreateText(canvas.transform, "StatusLabel", new Vector2(24f, -96f), 24f, "READY", TextAlignmentOptions.TopLeft);
             TMP_Text confidenceLabel = CreateText(canvas.transform, "ConfidenceLabel", new Vector2(24f, -128f), 22f, "TRACK 0.00", TextAlignmentOptions.TopLeft);
+            TMP_Text scoreLabel = CreateText(canvas.transform, "ScoreLabel", new Vector2(24f, -164f), 22f, "SCORE 0  HIT 0/0  0%", TextAlignmentOptions.TopLeft);
+            TMP_Text eventLabel = CreateText(canvas.transform, "EventLabel", new Vector2(24f, -210f), 24f, "START PYTHON SENDER", TextAlignmentOptions.TopLeft);
+            eventLabel.color = new Color(1f, 0.9f, 0.25f, 1f);
             AimReticleController reticle = CreateReticle(canvas.transform);
 
-            ConfigureHud(hud, weaponLabel, ammoLabel, statusLabel, confidenceLabel);
+            ConfigureHud(hud, weaponLabel, ammoLabel, statusLabel, confidenceLabel, scoreLabel, eventLabel);
             ConfigureController(controller, gestureClient, camera, pivotObject.transform, tracer, hud, reticle);
 
             CreateTarget(new Vector3(0f, 1.5f, 10f), false);
@@ -94,6 +97,7 @@ namespace MotionGun.Editor
             serializedObject.FindProperty("hud").objectReferenceValue = hud;
             serializedObject.FindProperty("reticle").objectReferenceValue = reticle;
             serializedObject.FindProperty("minTrackingConfidence").floatValue = 0.45f;
+            serializedObject.FindProperty("maxPacketAgeSeconds").floatValue = 0.35f;
 
             SerializedProperty weapons = serializedObject.FindProperty("weapons");
             weapons.arraySize = 3;
@@ -108,7 +112,9 @@ namespace MotionGun.Editor
             TMP_Text weaponLabel,
             TMP_Text ammoLabel,
             TMP_Text statusLabel,
-            TMP_Text confidenceLabel
+            TMP_Text confidenceLabel,
+            TMP_Text scoreLabel,
+            TMP_Text eventLabel
         )
         {
             SerializedObject serializedObject = new SerializedObject(hud);
@@ -116,6 +122,8 @@ namespace MotionGun.Editor
             serializedObject.FindProperty("ammoLabel").objectReferenceValue = ammoLabel;
             serializedObject.FindProperty("statusLabel").objectReferenceValue = statusLabel;
             serializedObject.FindProperty("confidenceLabel").objectReferenceValue = confidenceLabel;
+            serializedObject.FindProperty("scoreLabel").objectReferenceValue = scoreLabel;
+            serializedObject.FindProperty("eventLabel").objectReferenceValue = eventLabel;
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -167,7 +175,7 @@ namespace MotionGun.Editor
             rectTransform.anchorMax = new Vector2(0f, 1f);
             rectTransform.pivot = new Vector2(0f, 1f);
             rectTransform.anchoredPosition = anchoredPosition;
-            rectTransform.sizeDelta = new Vector2(520f, 40f);
+            rectTransform.sizeDelta = new Vector2(680f, 40f);
 
             TextMeshProUGUI label = textObject.GetComponent<TextMeshProUGUI>();
             label.fontSize = fontSize;

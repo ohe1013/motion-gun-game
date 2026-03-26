@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using MotionGun.Runtime;
 using MotionGun.UI;
@@ -25,6 +25,7 @@ namespace MotionGun.Gameplay
         [SerializeField] private LayerMask hitMask = ~0;
         [SerializeField] private float maxRange = 250f;
         [SerializeField] private float minTrackingConfidence = 0.45f;
+        [SerializeField] private float maxPacketAgeSeconds = 0.35f;
         [SerializeField] private List<WeaponConfig> weapons = new List<WeaponConfig>();
 
         private readonly Dictionary<int, WeaponConfig> _weaponsBySlot = new Dictionary<int, WeaponConfig>();
@@ -35,6 +36,12 @@ namespace MotionGun.Gameplay
         private WeaponState _state = WeaponState.TrackingLost;
         private float _reloadCompleteAt;
         private float _lastShotTime = float.NegativeInfinity;
+        private bool _wasTrackingReady;
+        private int _shotsFired;
+        private int _shotsHit;
+        private int _score;
+        private string _eventText = "START PYTHON SENDER";
+        private float _eventExpiresAt;
 
         private void Awake()
         {
@@ -62,12 +69,17 @@ namespace MotionGun.Gameplay
                 return;
             }
 
-            _latestPacket = gestureClient.LatestPacket;
-            UpdateTrackingState();
+            if (gestureClient.HasPacket)
+            {
+                _latestPacket = gestureClient.LatestPacket;
+            }
+
+            bool trackingReady = IsTrackingReady();
+            UpdateTrackingState(trackingReady);
             CompleteReloadIfReady();
             UpdateAim();
 
-            if (IsTrackingReady())
+            if (trackingReady)
             {
                 if (_latestPacket.weapon_slot > 0)
                 {
@@ -108,15 +120,21 @@ namespace MotionGun.Gameplay
             }
         }
 
-        private void UpdateTrackingState()
+        private void UpdateTrackingState(bool trackingReady)
         {
-            bool trackingReady = IsTrackingReady();
             if (!trackingReady)
             {
+                if (_wasTrackingReady)
+                {
+                    SetTransientEvent("TRACK LOST", 0.9f);
+                }
+
                 if (_state != WeaponState.Reloading)
                 {
                     _state = WeaponState.TrackingLost;
                 }
+
+                _wasTrackingReady = false;
                 return;
             }
 
@@ -124,6 +142,8 @@ namespace MotionGun.Gameplay
             {
                 _state = WeaponState.Idle;
             }
+
+            _wasTrackingReady = true;
         }
 
         private void CompleteReloadIfReady()
@@ -135,12 +155,17 @@ namespace MotionGun.Gameplay
 
             _ammoBySlot[_currentWeapon.SlotId] = _currentWeapon.MagazineSize;
             _state = IsTrackingReady() ? WeaponState.Idle : WeaponState.TrackingLost;
+            SetTransientEvent("RELOADED", 0.8f);
+        }
+
+        private bool HasFreshSignal()
+        {
+            return gestureClient != null && gestureClient.HasFreshPacket(maxPacketAgeSeconds);
         }
 
         private bool IsTrackingReady()
         {
-            return gestureClient != null
-                && gestureClient.HasPacket
+            return HasFreshSignal()
                 && _latestPacket.primary_hand_detected
                 && _latestPacket.tracking_confidence >= minTrackingConfidence;
         }
@@ -211,6 +236,11 @@ namespace MotionGun.Gameplay
             {
                 _state = WeaponState.Idle;
             }
+
+            if (!force)
+            {
+                SetTransientEvent("WEAPON " + weapon.DisplayName.ToUpperInvariant(), 0.8f);
+            }
         }
 
         private void StartReload()
@@ -232,6 +262,7 @@ namespace MotionGun.Gameplay
 
             _state = WeaponState.Reloading;
             _reloadCompleteAt = Time.time + _currentWeapon.ReloadDuration;
+            SetTransientEvent("RELOAD", 0.8f);
         }
 
         private void TryFire()
@@ -249,20 +280,30 @@ namespace MotionGun.Gameplay
             int ammo = _ammoBySlot[_currentWeapon.SlotId];
             if (ammo <= 0)
             {
+                SetTransientEvent("MAG EMPTY", 0.7f);
                 StartReload();
                 return;
             }
 
             _lastShotTime = Time.time;
+            _shotsFired += 1;
             _ammoBySlot[_currentWeapon.SlotId] = ammo - 1;
 
             Ray ray = BuildAimRay();
             Vector3 tracerEnd = ray.origin + (ray.direction * maxRange);
+            bool targetHit = false;
             RaycastHit hit;
             if (Physics.Raycast(ray, out hit, maxRange, hitMask, QueryTriggerInteraction.Ignore))
             {
                 tracerEnd = hit.point;
-                ApplyDamage(hit, _currentWeapon.Damage);
+                targetHit = ApplyDamage(hit, _currentWeapon.Damage);
+            }
+
+            if (targetHit)
+            {
+                _shotsHit += 1;
+                _score += 100;
+                SetTransientEvent("TARGET HIT", 0.5f);
             }
 
             if (muzzleFlash != null)
@@ -281,11 +322,12 @@ namespace MotionGun.Gameplay
 
             if (_ammoBySlot[_currentWeapon.SlotId] <= 0)
             {
+                SetTransientEvent("MAG EMPTY", 0.7f);
                 StartReload();
             }
         }
 
-        private void ApplyDamage(RaycastHit hit, float damage)
+        private bool ApplyDamage(RaycastHit hit, float damage)
         {
             MonoBehaviour[] behaviours = hit.collider.GetComponentsInParent<MonoBehaviour>();
             foreach (MonoBehaviour behaviour in behaviours)
@@ -294,9 +336,11 @@ namespace MotionGun.Gameplay
                 if (target != null)
                 {
                     target.ApplyHit(damage);
-                    break;
+                    return true;
                 }
             }
+
+            return false;
         }
 
         private IEnumerator FlashTracer(Vector3 start, Vector3 end)
@@ -310,6 +354,42 @@ namespace MotionGun.Gameplay
             _tracerCoroutine = null;
         }
 
+        private void SetTransientEvent(string eventText, float duration)
+        {
+            _eventText = eventText;
+            _eventExpiresAt = Time.time + duration;
+        }
+
+        private string GetEventText()
+        {
+            if (!string.IsNullOrEmpty(_eventText) && Time.time < _eventExpiresAt)
+            {
+                return _eventText;
+            }
+
+            if (!HasFreshSignal())
+            {
+                return "START PYTHON SENDER";
+            }
+
+            if (!_latestPacket.primary_hand_detected)
+            {
+                return "FORM GUN POSE";
+            }
+
+            if (!_latestPacket.secondary_hand_detected)
+            {
+                return "SHOW OFFHAND";
+            }
+
+            if (_state == WeaponState.Reloading)
+            {
+                return "RELOAD IN PROGRESS";
+            }
+
+            return "LOCKED";
+        }
+
         private void UpdateHud()
         {
             if (hud == null || _currentWeapon == null)
@@ -321,6 +401,10 @@ namespace MotionGun.Gameplay
             if (_state == WeaponState.Reloading)
             {
                 status = "RELOADING";
+            }
+            else if (!HasFreshSignal())
+            {
+                status = "NO SIGNAL";
             }
             else if (_state == WeaponState.TrackingLost)
             {
@@ -336,7 +420,11 @@ namespace MotionGun.Gameplay
                 _ammoBySlot[_currentWeapon.SlotId],
                 _currentWeapon.MagazineSize,
                 status,
-                _latestPacket.tracking_confidence
+                _latestPacket.tracking_confidence,
+                _score,
+                _shotsFired,
+                _shotsHit,
+                GetEventText()
             );
         }
     }

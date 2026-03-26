@@ -1,4 +1,4 @@
-﻿using TMPro;
+using TMPro;
 using UnityEngine;
 
 namespace MotionGun.UI
@@ -9,13 +9,19 @@ namespace MotionGun.UI
         [SerializeField] private TMP_Text ammoLabel;
         [SerializeField] private TMP_Text statusLabel;
         [SerializeField] private TMP_Text confidenceLabel;
+        [SerializeField] private TMP_Text scoreLabel;
+        [SerializeField] private TMP_Text eventLabel;
 
         public void RenderSnapshot(
             string weaponName,
             int ammo,
             int magazineSize,
             string status,
-            float confidence
+            float confidence,
+            int score,
+            int shotsFired,
+            int shotsHit,
+            string eventText
         )
         {
             if (weaponLabel != null)
@@ -25,7 +31,7 @@ namespace MotionGun.UI
 
             if (ammoLabel != null)
             {
-                ammoLabel.text = $"{ammo} / {magazineSize}";
+                ammoLabel.text = string.Format("{0} / {1}", ammo, magazineSize);
             }
 
             if (statusLabel != null)
@@ -35,7 +41,24 @@ namespace MotionGun.UI
 
             if (confidenceLabel != null)
             {
-                confidenceLabel.text = $"TRACK {confidence:0.00}";
+                confidenceLabel.text = string.Format("TRACK {0:0.00}", confidence);
+            }
+
+            if (scoreLabel != null)
+            {
+                float accuracy = shotsFired > 0 ? ((float)shotsHit / shotsFired) * 100f : 0f;
+                scoreLabel.text = string.Format(
+                    "SCORE {0}  HIT {1}/{2}  {3:0}%",
+                    score,
+                    shotsHit,
+                    shotsFired,
+                    accuracy
+                );
+            }
+
+            if (eventLabel != null)
+            {
+                eventLabel.text = eventText;
             }
         }
     }

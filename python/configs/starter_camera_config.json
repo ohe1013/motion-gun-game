@@ -1,0 +1,19 @@
+{
+  "min_tracking_confidence": 0.45,
+  "aim_smoothing": 0.35,
+  "fire_trigger_threshold": 0.58,
+  "fire_release_threshold": 0.34,
+  "fire_cooldown_seconds": 0.18,
+  "reload_window_seconds": 0.45,
+  "reload_vertical_distance": 0.16,
+  "reload_horizontal_tolerance": 0.24,
+  "reload_cooldown_seconds": 0.8,
+  "reload_start_margin": 0.06,
+  "reload_finish_margin": 0.04,
+  "weapon_hold_seconds": 0.35,
+  "slot_mapping": {
+    "1": 1,
+    "2": 2,
+    "3": 3
+  }
+}

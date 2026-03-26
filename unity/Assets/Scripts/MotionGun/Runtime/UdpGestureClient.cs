@@ -21,6 +21,7 @@ namespace MotionGun.Runtime
 
         public GesturePacket LatestPacket { get; private set; } = new GesturePacket();
         public bool HasPacket { get; private set; }
+        public float LastPacketReceivedRealtime { get; private set; } = float.NegativeInfinity;
         public event Action<GesturePacket> PacketUpdated;
 
         private void Awake()
@@ -51,6 +52,7 @@ namespace MotionGun.Runtime
 
                     LatestPacket = packet;
                     HasPacket = true;
+                    LastPacketReceivedRealtime = Time.realtimeSinceStartup;
                     if (PacketUpdated != null)
                     {
                         PacketUpdated(packet);
@@ -128,6 +130,12 @@ namespace MotionGun.Runtime
                     return;
                 }
             }
+        }
+
+        public bool HasFreshPacket(float maxAgeSeconds)
+        {
+            return HasPacket
+                && (Time.realtimeSinceStartup - LastPacketReceivedRealtime) <= maxAgeSeconds;
         }
     }
 }

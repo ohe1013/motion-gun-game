@@ -2,6 +2,7 @@ param(
     [int]$CameraIndex = 0,
     [string]$ServerHost = "127.0.0.1",
     [int]$Port = 5053,
+    [string]$ConfigPath = "",
     [ValidateSet("", "Left", "Right")]
     [string]$PrimaryLabel = "",
     [switch]$ShowPreview
@@ -23,6 +24,10 @@ $args = @(
     "--port",
     $Port
 )
+
+if ($ConfigPath) {
+    $args += @("--config", $ConfigPath)
+}
 
 if ($PrimaryLabel) {
     $args += @("--primary-label", $PrimaryLabel)

@@ -10,7 +10,7 @@ That menu creates:
 
 - a camera with `UdpGestureClient`
 - a `MotionGunController` object with three example weapons
-- a HUD canvas with text labels and a reticle
+- a HUD canvas with weapon, ammo, confidence, score, accuracy, event text, and a reticle
 - a ground plane, backdrop, and three example targets
 
 ## Manual references
@@ -29,6 +29,8 @@ If you want to wire the scene yourself, `MotionGunController` needs:
 ## Runtime notes
 
 - Python sender defaults to `127.0.0.1:5053`. Match the same port in `UdpGestureClient`.
+- `MotionGunController` treats packets older than roughly `0.35s` as stale and shows `NO SIGNAL`, so the demo recovers cleanly if the sender stops.
 - Python aim coordinates use image space, so Unity converts `aim_y` internally from top-left origin to viewport space.
 - If tracking feels too noisy, raise `Min Tracking Confidence` on `MotionGunController` or adjust thresholds in the Python `GestureConfig`.
+- Python threshold tuning can be done with `run_sender.ps1 -ConfigPath .\configs\starter_camera_config.json`.
 - If Unity imports TextMeshPro essentials on first open, complete that import before creating the demo scene.

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import time
@@ -20,12 +20,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--camera-index", type=int, default=0)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5053)
+    parser.add_argument("--config")
     parser.add_argument("--primary-label", choices=["Left", "Right"], default=None)
     parser.add_argument("--show-preview", action="store_true")
     return parser
 
 
-def _draw_preview(frame, packet) -> None:
+def _draw_preview(frame, packet, features) -> None:
     if cv2 is None:
         return
 
@@ -57,6 +58,49 @@ def _draw_preview(frame, packet) -> None:
         (255, 255, 255),
         1,
     )
+    cv2.putText(
+        frame,
+        f"hands: {len(features.hands)}",
+        (16, 112),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (255, 255, 255),
+        1,
+    )
+
+    event_label = ""
+    if packet.fire:
+        event_label = "FIRE"
+    elif packet.reload:
+        event_label = "RELOAD"
+    elif packet.weapon_slot > 0:
+        event_label = f"WEAPON {packet.weapon_slot}"
+
+    if event_label:
+        cv2.putText(
+            frame,
+            event_label,
+            (16, 148),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 210, 255),
+            2,
+        )
+
+    for index, hand in enumerate(features.hands[:2]):
+        cv2.putText(
+            frame,
+            (
+                f"{hand.label} gun={hand.gun_pose_score:.2f} "
+                f"trigger={hand.trigger_curl:.2f} fingers={hand.finger_count}"
+            ),
+            (16, 188 + (index * 28)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+        )
+
     height, width = frame.shape[:2]
     aim_x = int(packet.aim_x * width)
     aim_y = int(packet.aim_y * height)
@@ -79,7 +123,10 @@ def main() -> None:
     if not camera.isOpened():
         raise RuntimeError(f"Could not open camera index {args.camera_index}.")
 
-    config = GestureConfig(primary_hand_label=args.primary_label)
+    config = GestureConfig.from_json_file(args.config) if args.config else GestureConfig()
+    if args.primary_label is not None:
+        config.primary_hand_label = args.primary_label
+
     engine = GestureEngine(config)
     tracker = MediaPipeHandTracker()
     sender = UdpJsonSender(args.host, args.port)
@@ -97,7 +144,7 @@ def main() -> None:
             sender.send(packet)
 
             if args.show_preview:
-                _draw_preview(frame, packet)
+                _draw_preview(frame, packet, features)
                 cv2.imshow("Motion Gun Camera", frame)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):

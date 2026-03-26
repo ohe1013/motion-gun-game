@@ -51,8 +51,13 @@ Useful sender options:
 - `-CameraIndex 0`
 - `-ServerHost 127.0.0.1`
 - `-Port 5053`
+- `-ConfigPath .\configs\starter_camera_config.json`
 - `-PrimaryLabel Right`
 - `-ShowPreview`
+
+You can tune gesture thresholds without editing code by copying `python/configs/starter_camera_config.json` and passing it through `-ConfigPath`.
+
+The preview now shows current hand count, per-hand debug values, and transient `FIRE` / `RELOAD` / `WEAPON` events to help calibration.
 
 Preview controls:
 
@@ -65,5 +70,7 @@ Preview controls:
 2. Copy `unity/Assets/Scripts/MotionGun` into `Assets/Scripts`.
 3. In Unity, run `MotionGun > Create Demo Scene` from the top menu.
 4. Press Play while the Python sender is running.
+
+The generated demo scene includes score, hit-rate, and event feedback HUD lines, and automatically falls back to `NO SIGNAL` if the Python sender stops.
 
 More scene wiring notes are in `unity/README.md`.
