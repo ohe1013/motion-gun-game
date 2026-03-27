@@ -1,4 +1,4 @@
-﻿# Motion Gun Game
+# Motion Gun Game
 
 Camera-driven shooting demo with a Python gesture recognizer and Unity runtime scripts.
 
@@ -71,6 +71,12 @@ Preview controls:
 3. In Unity, run `MotionGun > Create Demo Scene` from the top menu.
 4. Press Play while the Python sender is running.
 
-The generated demo scene includes score, hit-rate, and event feedback HUD lines, and automatically falls back to `NO SIGNAL` if the Python sender stops.
+The generated demo scene now builds a wave-clear range MVP:
+
+- First valid fire starts the run.
+- Clear 4 waves before the 90 second timer expires.
+- The timer pauses whenever signal tracking is lost.
+- After `TIME UP` or `RANGE CLEAR`, fire again to restart.
+- The HUD shows weapon/ammo, tracking, score, accuracy, wave, timer, remaining targets, and session banner text.
 
 More scene wiring notes are in `unity/README.md`.

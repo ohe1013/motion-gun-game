@@ -39,6 +39,7 @@ namespace MotionGun.Editor
 
             GameObject controllerObject = new GameObject("MotionGunController");
             MotionGunController controller = controllerObject.AddComponent<MotionGunController>();
+            RangeSessionController sessionController = controllerObject.AddComponent<RangeSessionController>();
 
             GameObject pivotObject = new GameObject("WeaponPivot");
             pivotObject.transform.SetParent(controllerObject.transform, false);
@@ -65,15 +66,40 @@ namespace MotionGun.Editor
             TMP_Text confidenceLabel = CreateText(canvas.transform, "ConfidenceLabel", new Vector2(24f, -128f), 22f, "TRACK 0.00", TextAlignmentOptions.TopLeft);
             TMP_Text scoreLabel = CreateText(canvas.transform, "ScoreLabel", new Vector2(24f, -164f), 22f, "SCORE 0  HIT 0/0  0%", TextAlignmentOptions.TopLeft);
             TMP_Text eventLabel = CreateText(canvas.transform, "EventLabel", new Vector2(24f, -210f), 24f, "START PYTHON SENDER", TextAlignmentOptions.TopLeft);
+            TMP_Text waveLabel = CreateText(canvas.transform, "WaveLabel", new Vector2(-24f, -24f), 26f, "WAVE 0/4", TextAlignmentOptions.TopRight);
+            TMP_Text timerLabel = CreateText(canvas.transform, "TimerLabel", new Vector2(-24f, -60f), 28f, "TIME 01:30", TextAlignmentOptions.TopRight);
+            TMP_Text remainingTargetsLabel = CreateText(canvas.transform, "TargetsLabel", new Vector2(-24f, -96f), 24f, "TARGETS 0", TextAlignmentOptions.TopRight);
+            TMP_Text bannerLabel = CreateCenteredText(canvas.transform, "BannerLabel", new Vector2(0f, -72f), 44f, "FIRE TO START");
             eventLabel.color = new Color(1f, 0.9f, 0.25f, 1f);
+            bannerLabel.color = new Color(1f, 0.95f, 0.55f, 1f);
             AimReticleController reticle = CreateReticle(canvas.transform);
 
-            ConfigureHud(hud, weaponLabel, ammoLabel, statusLabel, confidenceLabel, scoreLabel, eventLabel);
+            ConfigureHud(
+                hud,
+                weaponLabel,
+                ammoLabel,
+                statusLabel,
+                confidenceLabel,
+                scoreLabel,
+                eventLabel,
+                waveLabel,
+                timerLabel,
+                remainingTargetsLabel,
+                bannerLabel
+            );
             ConfigureController(controller, gestureClient, camera, pivotObject.transform, tracer, hud, reticle);
 
-            CreateTarget(new Vector3(0f, 1.5f, 10f), false);
-            CreateTarget(new Vector3(-2.5f, 1.4f, 14f), true);
-            CreateTarget(new Vector3(2.8f, 1.8f, 18f), true);
+            GameObject targetsRoot = new GameObject("Targets");
+            RangeTarget[] targets = new[]
+            {
+                CreateTarget(targetsRoot.transform, "Target01", new Vector3(0f, 1.5f, 10f), Vector3.right),
+                CreateTarget(targetsRoot.transform, "Target02", new Vector3(-2.5f, 1.4f, 14f), Vector3.right),
+                CreateTarget(targetsRoot.transform, "Target03", new Vector3(2.8f, 1.8f, 18f), Vector3.left),
+                CreateTarget(targetsRoot.transform, "Target04", new Vector3(-4.4f, 1.6f, 20f), Vector3.left),
+                CreateTarget(targetsRoot.transform, "Target05", new Vector3(4.2f, 1.35f, 22f), Vector3.right),
+                CreateTarget(targetsRoot.transform, "Target06", new Vector3(0.75f, 2.05f, 16f), Vector3.left),
+            };
+            ConfigureSessionController(sessionController, controller, targets);
 
             EditorSceneManager.MarkSceneDirty(scene);
             Selection.activeGameObject = controllerObject;
@@ -107,6 +133,27 @@ namespace MotionGun.Editor
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        private static void ConfigureSessionController(
+            RangeSessionController sessionController,
+            MotionGunController motionGunController,
+            RangeTarget[] targets
+        )
+        {
+            SerializedObject serializedObject = new SerializedObject(sessionController);
+            serializedObject.FindProperty("motionGunController").objectReferenceValue = motionGunController;
+            serializedObject.FindProperty("sessionDurationSeconds").floatValue = 90f;
+            serializedObject.FindProperty("waveIntroDuration").floatValue = 1.25f;
+
+            SerializedProperty targetPool = serializedObject.FindProperty("targetPool");
+            targetPool.arraySize = targets.Length;
+            for (int index = 0; index < targets.Length; index++)
+            {
+                targetPool.GetArrayElementAtIndex(index).objectReferenceValue = targets[index];
+            }
+
+            serializedObject.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private static void ConfigureHud(
             RangeHudController hud,
             TMP_Text weaponLabel,
@@ -114,7 +161,11 @@ namespace MotionGun.Editor
             TMP_Text statusLabel,
             TMP_Text confidenceLabel,
             TMP_Text scoreLabel,
-            TMP_Text eventLabel
+            TMP_Text eventLabel,
+            TMP_Text waveLabel,
+            TMP_Text timerLabel,
+            TMP_Text remainingTargetsLabel,
+            TMP_Text bannerLabel
         )
         {
             SerializedObject serializedObject = new SerializedObject(hud);
@@ -124,6 +175,10 @@ namespace MotionGun.Editor
             serializedObject.FindProperty("confidenceLabel").objectReferenceValue = confidenceLabel;
             serializedObject.FindProperty("scoreLabel").objectReferenceValue = scoreLabel;
             serializedObject.FindProperty("eventLabel").objectReferenceValue = eventLabel;
+            serializedObject.FindProperty("waveLabel").objectReferenceValue = waveLabel;
+            serializedObject.FindProperty("timerLabel").objectReferenceValue = timerLabel;
+            serializedObject.FindProperty("remainingTargetsLabel").objectReferenceValue = remainingTargetsLabel;
+            serializedObject.FindProperty("bannerLabel").objectReferenceValue = bannerLabel;
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -171,9 +226,13 @@ namespace MotionGun.Editor
             textObject.transform.SetParent(parent, false);
 
             RectTransform rectTransform = textObject.GetComponent<RectTransform>();
-            rectTransform.anchorMin = new Vector2(0f, 1f);
-            rectTransform.anchorMax = new Vector2(0f, 1f);
-            rectTransform.pivot = new Vector2(0f, 1f);
+            rectTransform.pivot = alignment == TextAlignmentOptions.TopRight
+                ? new Vector2(1f, 1f)
+                : new Vector2(0f, 1f);
+            rectTransform.anchorMin = alignment == TextAlignmentOptions.TopRight
+                ? new Vector2(1f, 1f)
+                : new Vector2(0f, 1f);
+            rectTransform.anchorMax = rectTransform.anchorMin;
             rectTransform.anchoredPosition = anchoredPosition;
             rectTransform.sizeDelta = new Vector2(680f, 40f);
 
@@ -181,6 +240,32 @@ namespace MotionGun.Editor
             label.fontSize = fontSize;
             label.text = text;
             label.alignment = alignment;
+            label.color = Color.white;
+            return label;
+        }
+
+        private static TMP_Text CreateCenteredText(
+            Transform parent,
+            string name,
+            Vector2 anchoredPosition,
+            float fontSize,
+            string text
+        )
+        {
+            GameObject textObject = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
+            textObject.transform.SetParent(parent, false);
+
+            RectTransform rectTransform = textObject.GetComponent<RectTransform>();
+            rectTransform.anchorMin = new Vector2(0.5f, 1f);
+            rectTransform.anchorMax = new Vector2(0.5f, 1f);
+            rectTransform.pivot = new Vector2(0.5f, 1f);
+            rectTransform.anchoredPosition = anchoredPosition;
+            rectTransform.sizeDelta = new Vector2(900f, 56f);
+
+            TextMeshProUGUI label = textObject.GetComponent<TextMeshProUGUI>();
+            label.fontSize = fontSize;
+            label.text = text;
+            label.alignment = TextAlignmentOptions.Top;
             label.color = Color.white;
             return label;
         }
@@ -237,22 +322,26 @@ namespace MotionGun.Editor
             }
         }
 
-        private static void CreateTarget(Vector3 position, bool moving)
+        private static RangeTarget CreateTarget(
+            Transform parent,
+            string name,
+            Vector3 position,
+            Vector3 travelAxis
+        )
         {
             GameObject target = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            target.name = moving ? "MovingTarget" : "StaticTarget";
+            target.name = name;
+            target.transform.SetParent(parent, false);
             target.transform.position = position;
             target.transform.localScale = new Vector3(0.6f, 0.1f, 0.6f);
 
             RangeTarget rangeTarget = target.AddComponent<RangeTarget>();
-            if (moving)
-            {
-                SerializedObject serializedObject = new SerializedObject(rangeTarget);
-                serializedObject.FindProperty("travelAxis").vector3Value = Vector3.right;
-                serializedObject.FindProperty("travelDistance").floatValue = 1.6f;
-                serializedObject.FindProperty("travelSpeed").floatValue = 1.35f;
-                serializedObject.ApplyModifiedPropertiesWithoutUndo();
-            }
+            SerializedObject serializedObject = new SerializedObject(rangeTarget);
+            serializedObject.FindProperty("travelAxis").vector3Value = travelAxis;
+            serializedObject.FindProperty("travelDistance").floatValue = 1.6f;
+            serializedObject.FindProperty("travelSpeed").floatValue = 1.2f;
+            serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            return rangeTarget;
         }
     }
 }

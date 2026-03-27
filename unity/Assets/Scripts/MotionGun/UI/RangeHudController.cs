@@ -11,6 +11,10 @@ namespace MotionGun.UI
         [SerializeField] private TMP_Text confidenceLabel;
         [SerializeField] private TMP_Text scoreLabel;
         [SerializeField] private TMP_Text eventLabel;
+        [SerializeField] private TMP_Text waveLabel;
+        [SerializeField] private TMP_Text timerLabel;
+        [SerializeField] private TMP_Text remainingTargetsLabel;
+        [SerializeField] private TMP_Text bannerLabel;
 
         public void RenderSnapshot(
             string weaponName,
@@ -21,7 +25,12 @@ namespace MotionGun.UI
             int score,
             int shotsFired,
             int shotsHit,
-            string eventText
+            string eventText,
+            int currentWave,
+            int totalWaves,
+            int remainingTargets,
+            float timeRemainingSeconds,
+            string sessionBanner
         )
         {
             if (weaponLabel != null)
@@ -59,6 +68,33 @@ namespace MotionGun.UI
             if (eventLabel != null)
             {
                 eventLabel.text = eventText;
+            }
+
+            if (waveLabel != null)
+            {
+                waveLabel.text = totalWaves > 0
+                    ? string.Format("WAVE {0}/{1}", Mathf.Max(currentWave, 0), totalWaves)
+                    : "WAVE --";
+            }
+
+            if (timerLabel != null)
+            {
+                int secondsRemaining = Mathf.Max(0, Mathf.CeilToInt(timeRemainingSeconds));
+                timerLabel.text = string.Format(
+                    "TIME {0:00}:{1:00}",
+                    secondsRemaining / 60,
+                    secondsRemaining % 60
+                );
+            }
+
+            if (remainingTargetsLabel != null)
+            {
+                remainingTargetsLabel.text = string.Format("TARGETS {0}", Mathf.Max(remainingTargets, 0));
+            }
+
+            if (bannerLabel != null)
+            {
+                bannerLabel.text = sessionBanner;
             }
         }
     }

@@ -1,4 +1,4 @@
-﻿# Unity Wiring
+# Unity Wiring
 
 Copy `Assets/Scripts/MotionGun` into your Unity project.
 
@@ -9,9 +9,17 @@ Use the editor menu item `MotionGun > Create Demo Scene`.
 That menu creates:
 
 - a camera with `UdpGestureClient`
-- a `MotionGunController` object with three example weapons
-- a HUD canvas with weapon, ammo, confidence, score, accuracy, event text, and a reticle
-- a ground plane, backdrop, and three example targets
+- a `MotionGunController` object with three example weapons and a `RangeSessionController`
+- a HUD canvas with weapon, ammo, confidence, score, accuracy, wave, timer, remaining targets, event text, a banner, and a reticle
+- a ground plane, backdrop, and a reusable six-target pool for the wave loop
+
+## Session flow
+
+- Wait for a fresh tracked signal, then fire once to start.
+- Clear 4 waves before the 90 second global timer expires.
+- The timer pauses during `NO SIGNAL` or lost primary-hand tracking.
+- `WaveIntro` banners appear between waves for 1.25 seconds.
+- After `TIME UP` or `RANGE CLEAR`, fire again to reset the run.
 
 ## Manual references
 
@@ -26,10 +34,17 @@ If you want to wire the scene yourself, `MotionGunController` needs:
 - `Reticle`: `AimReticleController` component.
 - `Weapons`: configure 2 to 3 entries with slot ids 1, 2, and 3.
 
+`RangeSessionController` needs:
+
+- `Motion Gun Controller`: the `MotionGunController` instance.
+- `Target Pool`: 6 reusable `RangeTarget` objects.
+- `Session Duration Seconds`: defaults to `90`.
+- `Wave Intro Duration`: defaults to `1.25`.
+
 ## Runtime notes
 
 - Python sender defaults to `127.0.0.1:5053`. Match the same port in `UdpGestureClient`.
-- `MotionGunController` treats packets older than roughly `0.35s` as stale and shows `NO SIGNAL`, so the demo recovers cleanly if the sender stops.
+- `MotionGunController` treats packets older than roughly `0.35s` as stale and shows `NO SIGNAL`.
 - Python aim coordinates use image space, so Unity converts `aim_y` internally from top-left origin to viewport space.
 - If tracking feels too noisy, raise `Min Tracking Confidence` on `MotionGunController` or adjust thresholds in the Python `GestureConfig`.
 - Python threshold tuning can be done with `run_sender.ps1 -ConfigPath .\configs\starter_camera_config.json`.

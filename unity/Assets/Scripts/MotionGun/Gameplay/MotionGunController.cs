@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using MotionGun.Runtime;
@@ -37,11 +38,22 @@ namespace MotionGun.Gameplay
         private float _reloadCompleteAt;
         private float _lastShotTime = float.NegativeInfinity;
         private bool _wasTrackingReady;
+        private bool _combatActive;
+        private bool _consumeCurrentFirePulse;
         private int _shotsFired;
         private int _shotsHit;
         private int _score;
+        private int _hudCurrentWave;
+        private int _hudTotalWaves;
+        private int _hudRemainingTargets;
+        private float _hudTimeRemainingSeconds;
+        private string _hudSessionBanner = "FIRE TO START";
         private string _eventText = "START PYTHON SENDER";
         private float _eventExpiresAt;
+
+        public event Action FirePulse;
+
+        public bool TrackingReady => IsTrackingReady();
 
         private void Awake()
         {
@@ -75,29 +87,102 @@ namespace MotionGun.Gameplay
             }
 
             bool trackingReady = IsTrackingReady();
+            _consumeCurrentFirePulse = false;
+
             UpdateTrackingState(trackingReady);
             CompleteReloadIfReady();
             UpdateAim();
 
             if (trackingReady)
             {
-                if (_latestPacket.weapon_slot > 0)
-                {
-                    SwitchWeapon(_latestPacket.weapon_slot, false);
-                }
-
-                if (_latestPacket.reload)
-                {
-                    StartReload();
-                }
-
                 if (_latestPacket.fire)
                 {
-                    TryFire();
+                    if (FirePulse != null)
+                    {
+                        FirePulse();
+                    }
+                }
+
+                if (_combatActive)
+                {
+                    if (_latestPacket.weapon_slot > 0)
+                    {
+                        SwitchWeapon(_latestPacket.weapon_slot, false);
+                    }
+
+                    if (_latestPacket.reload)
+                    {
+                        StartReload();
+                    }
+
+                    if (_latestPacket.fire && !_consumeCurrentFirePulse)
+                    {
+                        TryFire();
+                    }
                 }
             }
 
             UpdateHud();
+        }
+
+        public void SetCombatActive(bool combatActive)
+        {
+            _combatActive = combatActive;
+        }
+
+        public void ConsumeCurrentFirePulse()
+        {
+            _consumeCurrentFirePulse = true;
+        }
+
+        public void ResetSession()
+        {
+            BuildWeaponTable();
+            _shotsFired = 0;
+            _shotsHit = 0;
+            _score = 0;
+            _lastShotTime = float.NegativeInfinity;
+            _reloadCompleteAt = 0f;
+            _state = IsTrackingReady() ? WeaponState.Idle : WeaponState.TrackingLost;
+            _eventText = string.Empty;
+            _eventExpiresAt = 0f;
+
+            if (weapons.Count > 0)
+            {
+                SwitchWeapon(weapons[0].SlotId, true);
+            }
+
+            if (_tracerCoroutine != null)
+            {
+                StopCoroutine(_tracerCoroutine);
+                _tracerCoroutine = null;
+            }
+
+            if (tracer != null)
+            {
+                tracer.enabled = false;
+            }
+        }
+
+        public void ConfigureSessionHud(
+            int currentWave,
+            int totalWaves,
+            int remainingTargets,
+            float timeRemainingSeconds,
+            string sessionBanner
+        )
+        {
+            _hudCurrentWave = currentWave;
+            _hudTotalWaves = totalWaves;
+            _hudRemainingTargets = remainingTargets;
+            _hudTimeRemainingSeconds = timeRemainingSeconds;
+            _hudSessionBanner = sessionBanner ?? string.Empty;
+        }
+
+        public void AddScore(int amount)
+        {
+            _score += Mathf.Max(0, amount);
+            SetTransientEvent("TARGET DOWN", 0.6f);
         }
 
         private void BuildWeaponTable()
@@ -148,7 +233,7 @@ namespace MotionGun.Gameplay
 
         private void CompleteReloadIfReady()
         {
-            if (_state != WeaponState.Reloading || Time.time < _reloadCompleteAt)
+            if (!_combatActive || _state != WeaponState.Reloading || Time.time < _reloadCompleteAt)
             {
                 return;
             }
@@ -302,7 +387,6 @@ namespace MotionGun.Gameplay
             if (targetHit)
             {
                 _shotsHit += 1;
-                _score += 100;
                 SetTransientEvent("TARGET HIT", 0.5f);
             }
 
@@ -377,6 +461,11 @@ namespace MotionGun.Gameplay
                 return "FORM GUN POSE";
             }
 
+            if (!_combatActive)
+            {
+                return "FIRE TO START";
+            }
+
             if (!_latestPacket.secondary_hand_detected)
             {
                 return "SHOW OFFHAND";
@@ -424,8 +513,14 @@ namespace MotionGun.Gameplay
                 _score,
                 _shotsFired,
                 _shotsHit,
-                GetEventText()
+                GetEventText(),
+                _hudCurrentWave,
+                _hudTotalWaves,
+                _hudRemainingTargets,
+                _hudTimeRemainingSeconds,
+                _hudSessionBanner
             );
         }
     }
 }
+

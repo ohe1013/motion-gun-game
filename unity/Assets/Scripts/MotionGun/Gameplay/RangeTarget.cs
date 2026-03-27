@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 
@@ -6,10 +7,8 @@ namespace MotionGun.Gameplay
     public class RangeTarget : MonoBehaviour, IMotionGunTarget
     {
         [SerializeField] private float hitPoints = 1f;
-        [SerializeField] private bool respawnAfterHit = true;
-        [SerializeField] private float respawnDelay = 1.25f;
         [SerializeField] private Vector3 travelAxis = Vector3.right;
-        [SerializeField] private float travelDistance = 0f;
+        [SerializeField] private float travelDistance = 1.6f;
         [SerializeField] private float travelSpeed = 1f;
         [SerializeField] private Color targetColor = new Color(0.8f, 0.18f, 0.12f, 1f);
         [SerializeField] private Color hitFlashColor = new Color(1f, 0.95f, 0.3f, 1f);
@@ -17,11 +16,18 @@ namespace MotionGun.Gameplay
         [SerializeField] private Collider targetCollider;
         [SerializeField] private Renderer[] targetRenderers;
 
+        private float _baseTravelDistance;
+        private float _baseTravelSpeed;
         private float _currentHitPoints;
         private Vector3 _startLocalPosition;
         private bool _hidden;
-        private float _respawnAt;
+        private bool _activeForWave;
+        private bool _cleared;
+        private float _runtimeTravelDistance;
+        private float _runtimeTravelSpeed;
         private Coroutine _hitFlashCoroutine;
+
+        public event Action<RangeTarget> Cleared;
 
         private void Awake()
         {
@@ -36,6 +42,8 @@ namespace MotionGun.Gameplay
             }
 
             _startLocalPosition = transform.localPosition;
+            _baseTravelDistance = travelDistance;
+            _baseTravelSpeed = travelSpeed;
             _currentHitPoints = hitPoints;
             ApplyTargetColor(targetColor);
             SetHidden(false);
@@ -43,23 +51,50 @@ namespace MotionGun.Gameplay
 
         private void Update()
         {
-            if (travelDistance > 0f && travelAxis.sqrMagnitude > 0f)
+            if (!_activeForWave)
             {
-                Vector3 offset = travelAxis.normalized * Mathf.Sin(Time.time * travelSpeed) * travelDistance;
-                transform.localPosition = _startLocalPosition + offset;
+                return;
             }
 
-            if (_hidden && respawnAfterHit && Time.time >= _respawnAt)
+            if (_runtimeTravelDistance > 0f && travelAxis.sqrMagnitude > 0f)
             {
-                _currentHitPoints = hitPoints;
-                ApplyTargetColor(targetColor);
-                SetHidden(false);
+                Vector3 offset = travelAxis.normalized * Mathf.Sin(Time.time * _runtimeTravelSpeed) * _runtimeTravelDistance;
+                transform.localPosition = _startLocalPosition + offset;
             }
+        }
+
+        public void ConfigureForWave(float waveHitPoints, bool moving, float speedMultiplier)
+        {
+            hitPoints = Mathf.Max(0.1f, waveHitPoints);
+            _currentHitPoints = hitPoints;
+            _runtimeTravelDistance = moving ? _baseTravelDistance : 0f;
+            _runtimeTravelSpeed = moving ? (_baseTravelSpeed * Mathf.Max(0.1f, speedMultiplier)) : 0f;
+            _activeForWave = true;
+            _cleared = false;
+            transform.localPosition = _startLocalPosition;
+            ApplyTargetColor(targetColor);
+            SetHidden(false);
+        }
+
+        public void DeactivateForWave()
+        {
+            if (_hitFlashCoroutine != null)
+            {
+                StopCoroutine(_hitFlashCoroutine);
+                _hitFlashCoroutine = null;
+            }
+
+            _activeForWave = false;
+            _cleared = false;
+            _currentHitPoints = hitPoints;
+            transform.localPosition = _startLocalPosition;
+            ApplyTargetColor(targetColor);
+            SetHidden(true);
         }
 
         public void ApplyHit(float damage)
         {
-            if (_hidden)
+            if (_hidden || !_activeForWave || _cleared)
             {
                 return;
             }
@@ -76,14 +111,13 @@ namespace MotionGun.Gameplay
                 return;
             }
 
-            if (respawnAfterHit)
+            _cleared = true;
+            _activeForWave = false;
+            SetHidden(true);
+            if (Cleared != null)
             {
-                _respawnAt = Time.time + respawnDelay;
-                SetHidden(true);
-                return;
+                Cleared(this);
             }
-
-            Destroy(gameObject);
         }
 
         private IEnumerator FlashHit()
