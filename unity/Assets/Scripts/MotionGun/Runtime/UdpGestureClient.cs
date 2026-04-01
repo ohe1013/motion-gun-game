@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace MotionGun.Runtime
 {
-    public class UdpGestureClient : MonoBehaviour
+    public class UdpGestureClient : MonoBehaviour, IGesturePacketSource
     {
         [SerializeField] private string bindAddress = "127.0.0.1";
         [SerializeField] private int port = 5053;
@@ -18,6 +18,7 @@ namespace MotionGun.Runtime
         private UdpClient _udpClient;
         private Thread _receiveThread;
         private volatile bool _isRunning;
+        private IMotionGunTimeSource _timeSource = UnityMotionGunTimeSource.Instance;
 
         public GesturePacket LatestPacket { get; private set; } = new GesturePacket();
         public bool HasPacket { get; private set; }
@@ -52,7 +53,7 @@ namespace MotionGun.Runtime
 
                     LatestPacket = packet;
                     HasPacket = true;
-                    LastPacketReceivedRealtime = Time.realtimeSinceStartup;
+                    LastPacketReceivedRealtime = _timeSource.RealtimeSinceStartup;
                     if (PacketUpdated != null)
                     {
                         PacketUpdated(packet);
@@ -135,7 +136,12 @@ namespace MotionGun.Runtime
         public bool HasFreshPacket(float maxAgeSeconds)
         {
             return HasPacket
-                && (Time.realtimeSinceStartup - LastPacketReceivedRealtime) <= maxAgeSeconds;
+                && (_timeSource.RealtimeSinceStartup - LastPacketReceivedRealtime) <= maxAgeSeconds;
+        }
+
+        public void SetTimeSource(IMotionGunTimeSource timeSource)
+        {
+            _timeSource = timeSource ?? UnityMotionGunTimeSource.Instance;
         }
     }
 }

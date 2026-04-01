@@ -10,6 +10,7 @@ That menu creates:
 
 - a camera with `UdpGestureClient`
 - a `MotionGunController` object with three example weapons and a `RangeSessionController`
+- a primitive-based first-person weapon visual set attached to the weapon pivot
 - a HUD canvas with weapon, ammo, confidence, score, accuracy, wave, timer, remaining targets, event text, a banner, and a reticle
 - a ground plane, backdrop, and a reusable six-target pool for the wave loop
 
@@ -20,6 +21,8 @@ That menu creates:
 - The timer pauses during `NO SIGNAL` or lost primary-hand tracking.
 - `WaveIntro` banners appear between waves for 1.25 seconds.
 - After `TIME UP` or `RANGE CLEAR`, fire again to reset the run.
+- The default scene now gives the `Burst` weapon a true 3-shot burst and makes moving and armored targets visually distinct.
+- Weapon switching now also swaps visible first-person gun models with different recoil feel per weapon.
 
 ## Manual references
 
@@ -49,3 +52,9 @@ If you want to wire the scene yourself, `MotionGunController` needs:
 - If tracking feels too noisy, raise `Min Tracking Confidence` on `MotionGunController` or adjust thresholds in the Python `GestureConfig`.
 - Python threshold tuning can be done with `run_sender.ps1 -ConfigPath .\configs\starter_camera_config.json`.
 - If Unity imports TextMeshPro essentials on first open, complete that import before creating the demo scene.
+
+## Harness seams
+
+- `UdpGestureClient` now implements `IGesturePacketSource`, so tests can replace live UDP with a fake packet source.
+- `MotionGunController` exposes `SetGesturePacketSource(...)` and `SetTimeSource(...)` for deterministic PlayMode tests.
+- `RangeSessionController` exposes `SetTimeSource(...)` so wave/timer progression can be advanced without relying on wall-clock time.

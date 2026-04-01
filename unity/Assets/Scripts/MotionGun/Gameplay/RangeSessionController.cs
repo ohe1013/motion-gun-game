@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MotionGun.Runtime;
 using UnityEngine;
 
 namespace MotionGun.Gameplay
@@ -36,6 +37,7 @@ namespace MotionGun.Gameplay
         private float _waveIntroEndsAt;
         private int _currentWaveIndex = -1;
         private int _remainingTargets;
+        private IMotionGunTimeSource _timeSource = UnityMotionGunTimeSource.Instance;
 
         private void Awake()
         {
@@ -96,14 +98,14 @@ namespace MotionGun.Gameplay
 
             if (IsTimedState() && motionGunController.TrackingReady)
             {
-                _timeRemainingSeconds = Mathf.Max(0f, _timeRemainingSeconds - Time.deltaTime);
+                _timeRemainingSeconds = Mathf.Max(0f, _timeRemainingSeconds - _timeSource.DeltaTime);
                 if (_timeRemainingSeconds <= 0f)
                 {
                     EnterOutcome(SessionState.TimeUp, "TIME UP");
                 }
             }
 
-            if (_state == SessionState.WaveIntro && Time.time >= _waveIntroEndsAt)
+            if (_state == SessionState.WaveIntro && _timeSource.Time >= _waveIntroEndsAt)
             {
                 BeginCurrentWave();
             }
@@ -214,7 +216,7 @@ namespace MotionGun.Gameplay
         {
             _currentWaveIndex = waveIndex;
             _state = SessionState.WaveIntro;
-            _waveIntroEndsAt = Time.time + waveIntroDuration;
+            _waveIntroEndsAt = _timeSource.Time + waveIntroDuration;
             motionGunController.SetCombatActive(false);
 
             foreach (RangeTarget target in targetPool)
@@ -345,6 +347,11 @@ namespace MotionGun.Gameplay
                     movementSpeedMultiplier = 1.5f,
                 },
             };
+        }
+
+        public void SetTimeSource(IMotionGunTimeSource timeSource)
+        {
+            _timeSource = timeSource ?? UnityMotionGunTimeSource.Instance;
         }
     }
 }

@@ -2,6 +2,8 @@
 
 Camera-driven shooting demo with a Python gesture recognizer and Unity runtime scripts.
 
+Project progress is tracked in `PLAN.md`.
+
 ## Layout
 
 - `python/`: webcam capture, hand landmark processing, gesture inference, UDP sender, launch scripts, and tests.
@@ -34,12 +36,19 @@ The Python service sends JSON packets over UDP to `127.0.0.1:5053`.
 
 ## Python runtime
 
-This workspace already contains a ready virtual environment at `python/.venv` with `mediapipe`, `opencv-python`, and `numpy` installed.
+First-time setup:
+
+```powershell
+cd C:\Users\USER\Desktop\workspace\git\motion-gun-game\python
+.\bootstrap.ps1 -RunTests
+```
+
+This creates `python/.venv`, installs `mediapipe`, `opencv-python`, and `numpy`, and optionally runs the Python test suite.
 
 Quick commands:
 
 ```powershell
-cd E:\workspace\git\motion-gun-game\python
+cd C:\Users\USER\Desktop\workspace\git\motion-gun-game\python
 .\run_tests.ps1
 .\run_sender.ps1 -ShowPreview
 ```
@@ -49,9 +58,11 @@ On first run, the sender downloads the official MediaPipe hand landmarker model 
 Useful sender options:
 
 - `-CameraIndex 0`
+- `-CameraBackend auto`
 - `-ServerHost 127.0.0.1`
 - `-Port 5053`
 - `-ConfigPath .\configs\starter_camera_config.json`
+- `-SaveConfig .\configs\my_camera_config.json`
 - `-PrimaryLabel Right`
 - `-ShowPreview`
 
@@ -59,10 +70,26 @@ You can tune gesture thresholds without editing code by copying `python/configs/
 
 The preview now shows current hand count, per-hand debug values, and transient `FIRE` / `RELOAD` / `WEAPON` events to help calibration.
 
+Harness-oriented Python checks:
+
+```powershell
+cd .\python
+.\run_tests.ps1
+```
+
+Fixture-driven harness scenarios live in `python/tests/fixtures/` and replay `FrameFeatures -> GesturePacket` without requiring MediaPipe or a webcam.
+
+If `run_sender.ps1` reports missing modules, run `.\bootstrap.ps1` and retry.
+If the preview window opens but the image is black, first verify the webcam in the Windows Camera app, then try `-CameraBackend dshow` or another `-CameraIndex`.
+
 Preview controls:
 
 - `q`: quit
 - `c`: calibrate the currently tracked gun hand as primary
+- `[` / `]`: lower / raise minimum tracking confidence
+- `-` / `=`: lower / raise fire trigger threshold
+- `,` / `.`: lower / raise aim smoothing
+- `p`: save the current live tuning to `-SaveConfig`, `-ConfigPath`, or `python/configs/live_camera_config.json`
 
 ## Unity setup
 

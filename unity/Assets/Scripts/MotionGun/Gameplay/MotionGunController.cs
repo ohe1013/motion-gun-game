@@ -50,6 +50,13 @@ namespace MotionGun.Gameplay
         private string _hudSessionBanner = "FIRE TO START";
         private string _eventText = "START PYTHON SENDER";
         private float _eventExpiresAt;
+        private int _pendingBurstShots;
+        private float _nextBurstShotAt = float.PositiveInfinity;
+        private IGesturePacketSource _gesturePacketSource;
+        private IMotionGunTimeSource _timeSource = UnityMotionGunTimeSource.Instance;
+        private readonly Dictionary<int, Vector3> _weaponVisualBaseLocalPositions = new Dictionary<int, Vector3>();
+        private Transform _currentWeaponVisual;
+        private float _currentRecoilOffset;
 
         public event Action FirePulse;
 
@@ -60,6 +67,11 @@ namespace MotionGun.Gameplay
             if (aimCamera == null)
             {
                 aimCamera = Camera.main;
+            }
+
+            if (_gesturePacketSource == null)
+            {
+                _gesturePacketSource = gestureClient;
             }
 
             BuildWeaponTable();
@@ -76,14 +88,15 @@ namespace MotionGun.Gameplay
 
         private void Update()
         {
-            if (gestureClient == null || aimCamera == null || _currentWeapon == null)
+            IGesturePacketSource packetSource = GetGesturePacketSource();
+            if (packetSource == null || aimCamera == null || _currentWeapon == null)
             {
                 return;
             }
 
-            if (gestureClient.HasPacket)
+            if (packetSource.HasPacket)
             {
-                _latestPacket = gestureClient.LatestPacket;
+                _latestPacket = packetSource.LatestPacket;
             }
 
             bool trackingReady = IsTrackingReady();
@@ -92,6 +105,8 @@ namespace MotionGun.Gameplay
             UpdateTrackingState(trackingReady);
             CompleteReloadIfReady();
             UpdateAim();
+            ContinueBurstIfReady(trackingReady);
+            UpdateWeaponVisuals();
 
             if (trackingReady)
             {
@@ -143,6 +158,9 @@ namespace MotionGun.Gameplay
             _score = 0;
             _lastShotTime = float.NegativeInfinity;
             _reloadCompleteAt = 0f;
+            _pendingBurstShots = 0;
+            _nextBurstShotAt = float.PositiveInfinity;
+            _currentRecoilOffset = 0f;
             _state = IsTrackingReady() ? WeaponState.Idle : WeaponState.TrackingLost;
             _eventText = string.Empty;
             _eventExpiresAt = 0f;
@@ -162,6 +180,8 @@ namespace MotionGun.Gameplay
             {
                 tracer.enabled = false;
             }
+
+            UpdateWeaponVisuals(true);
         }
 
         public void ConfigureSessionHud(
@@ -185,6 +205,16 @@ namespace MotionGun.Gameplay
             SetTransientEvent("TARGET DOWN", 0.6f);
         }
 
+        public void SetGesturePacketSource(IGesturePacketSource packetSource)
+        {
+            _gesturePacketSource = packetSource;
+        }
+
+        public void SetTimeSource(IMotionGunTimeSource timeSource)
+        {
+            _timeSource = timeSource ?? UnityMotionGunTimeSource.Instance;
+        }
+
         private void BuildWeaponTable()
         {
             _weaponsBySlot.Clear();
@@ -202,6 +232,12 @@ namespace MotionGun.Gameplay
                 {
                     _ammoBySlot.Add(weapon.SlotId, weapon.MagazineSize);
                 }
+
+                if (weapon.WeaponVisualRoot != null)
+                {
+                    _weaponVisualBaseLocalPositions[weapon.SlotId] = weapon.WeaponVisualRoot.localPosition;
+                    weapon.WeaponVisualRoot.gameObject.SetActive(false);
+                }
             }
         }
 
@@ -209,6 +245,7 @@ namespace MotionGun.Gameplay
         {
             if (!trackingReady)
             {
+                CancelPendingBurst();
                 if (_wasTrackingReady)
                 {
                     SetTransientEvent("TRACK LOST", 0.9f);
@@ -233,7 +270,7 @@ namespace MotionGun.Gameplay
 
         private void CompleteReloadIfReady()
         {
-            if (!_combatActive || _state != WeaponState.Reloading || Time.time < _reloadCompleteAt)
+            if (!_combatActive || _state != WeaponState.Reloading || _timeSource.Time < _reloadCompleteAt)
             {
                 return;
             }
@@ -245,7 +282,8 @@ namespace MotionGun.Gameplay
 
         private bool HasFreshSignal()
         {
-            return gestureClient != null && gestureClient.HasFreshPacket(maxPacketAgeSeconds);
+            IGesturePacketSource packetSource = GetGesturePacketSource();
+            return packetSource != null && packetSource.HasFreshPacket(maxPacketAgeSeconds);
         }
 
         private bool IsTrackingReady()
@@ -317,6 +355,10 @@ namespace MotionGun.Gameplay
                 _ammoBySlot[slotId] = weapon.MagazineSize;
             }
 
+            _currentWeaponVisual = weapon.WeaponVisualRoot;
+            _currentRecoilOffset = 0f;
+            UpdateWeaponVisuals(true);
+
             if (_state != WeaponState.TrackingLost)
             {
                 _state = WeaponState.Idle;
@@ -345,8 +387,9 @@ namespace MotionGun.Gameplay
                 return;
             }
 
+            CancelPendingBurst();
             _state = WeaponState.Reloading;
-            _reloadCompleteAt = Time.time + _currentWeapon.ReloadDuration;
+            _reloadCompleteAt = _timeSource.Time + _currentWeapon.ReloadDuration;
             SetTransientEvent("RELOAD", 0.8f);
         }
 
@@ -357,9 +400,28 @@ namespace MotionGun.Gameplay
                 return;
             }
 
-            if (Time.time - _lastShotTime < _currentWeapon.FireInterval)
+            if (_timeSource.Time - _lastShotTime < _currentWeapon.FireInterval)
             {
                 return;
+            }
+
+            if (!FireSingleShot())
+            {
+                return;
+            }
+
+            _pendingBurstShots = Mathf.Max(0, _currentWeapon.ShotsPerTrigger - 1);
+            if (_pendingBurstShots > 0)
+            {
+                _nextBurstShotAt = _timeSource.Time + Mathf.Max(0.01f, _currentWeapon.BurstInterval);
+            }
+        }
+
+        private bool FireSingleShot()
+        {
+            if (_state != WeaponState.Idle || _currentWeapon == null)
+            {
+                return false;
             }
 
             int ammo = _ammoBySlot[_currentWeapon.SlotId];
@@ -367,10 +429,10 @@ namespace MotionGun.Gameplay
             {
                 SetTransientEvent("MAG EMPTY", 0.7f);
                 StartReload();
-                return;
+                return false;
             }
 
-            _lastShotTime = Time.time;
+            _lastShotTime = _timeSource.Time;
             _shotsFired += 1;
             _ammoBySlot[_currentWeapon.SlotId] = ammo - 1;
 
@@ -395,6 +457,8 @@ namespace MotionGun.Gameplay
                 muzzleFlash.Play();
             }
 
+            ApplyWeaponRecoil();
+
             if (tracer != null)
             {
                 if (_tracerCoroutine != null)
@@ -409,6 +473,92 @@ namespace MotionGun.Gameplay
                 SetTransientEvent("MAG EMPTY", 0.7f);
                 StartReload();
             }
+
+            return true;
+        }
+
+        private void ContinueBurstIfReady(bool trackingReady)
+        {
+            if (!trackingReady || !_combatActive || _pendingBurstShots <= 0 || _currentWeapon == null)
+            {
+                return;
+            }
+
+            if (_state != WeaponState.Idle || _timeSource.Time < _nextBurstShotAt)
+            {
+                return;
+            }
+
+            if (FireSingleShot())
+            {
+                _pendingBurstShots -= 1;
+                _nextBurstShotAt = _pendingBurstShots > 0
+                    ? _timeSource.Time + Mathf.Max(0.01f, _currentWeapon.BurstInterval)
+                    : float.PositiveInfinity;
+                return;
+            }
+
+            CancelPendingBurst();
+        }
+
+        private void CancelPendingBurst()
+        {
+            _pendingBurstShots = 0;
+            _nextBurstShotAt = float.PositiveInfinity;
+        }
+
+        private void ApplyWeaponRecoil()
+        {
+            if (_currentWeapon == null)
+            {
+                return;
+            }
+
+            _currentRecoilOffset = Mathf.Max(_currentRecoilOffset, _currentWeapon.RecoilDistance);
+        }
+
+        private void UpdateWeaponVisuals(bool forceSnap = false)
+        {
+            foreach (KeyValuePair<int, WeaponConfig> pair in _weaponsBySlot)
+            {
+                WeaponConfig weapon = pair.Value;
+                if (weapon == null || weapon.WeaponVisualRoot == null)
+                {
+                    continue;
+                }
+
+                bool isActive = weapon == _currentWeapon;
+                if (weapon.WeaponVisualRoot.gameObject.activeSelf != isActive)
+                {
+                    weapon.WeaponVisualRoot.gameObject.SetActive(isActive);
+                }
+            }
+
+            if (_currentWeapon == null || _currentWeaponVisual == null)
+            {
+                return;
+            }
+
+            Vector3 baseLocalPosition;
+            if (!_weaponVisualBaseLocalPositions.TryGetValue(_currentWeapon.SlotId, out baseLocalPosition))
+            {
+                baseLocalPosition = _currentWeaponVisual.localPosition;
+                _weaponVisualBaseLocalPositions[_currentWeapon.SlotId] = baseLocalPosition;
+            }
+
+            if (forceSnap)
+            {
+                _currentRecoilOffset = 0f;
+                _currentWeaponVisual.localPosition = baseLocalPosition;
+                return;
+            }
+
+            _currentRecoilOffset = Mathf.MoveTowards(
+                _currentRecoilOffset,
+                0f,
+                _currentWeapon.RecoilRecoverSpeed * _timeSource.DeltaTime
+            );
+            _currentWeaponVisual.localPosition = baseLocalPosition + new Vector3(0f, 0f, -_currentRecoilOffset);
         }
 
         private bool ApplyDamage(RaycastHit hit, float damage)
@@ -441,12 +591,12 @@ namespace MotionGun.Gameplay
         private void SetTransientEvent(string eventText, float duration)
         {
             _eventText = eventText;
-            _eventExpiresAt = Time.time + duration;
+            _eventExpiresAt = _timeSource.Time + duration;
         }
 
         private string GetEventText()
         {
-            if (!string.IsNullOrEmpty(_eventText) && Time.time < _eventExpiresAt)
+            if (!string.IsNullOrEmpty(_eventText) && _timeSource.Time < _eventExpiresAt)
             {
                 return _eventText;
             }
@@ -520,6 +670,11 @@ namespace MotionGun.Gameplay
                 _hudTimeRemainingSeconds,
                 _hudSessionBanner
             );
+        }
+
+        private IGesturePacketSource GetGesturePacketSource()
+        {
+            return _gesturePacketSource ?? gestureClient;
         }
     }
 }

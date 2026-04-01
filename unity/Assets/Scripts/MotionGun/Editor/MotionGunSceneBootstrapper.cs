@@ -44,6 +44,8 @@ namespace MotionGun.Editor
             GameObject pivotObject = new GameObject("WeaponPivot");
             pivotObject.transform.SetParent(controllerObject.transform, false);
             pivotObject.transform.position = camera.transform.position + (camera.transform.forward * 0.75f);
+            GameObject weaponVisualsRoot = new GameObject("WeaponVisuals");
+            weaponVisualsRoot.transform.SetParent(pivotObject.transform, false);
 
             LineRenderer tracer = controllerObject.AddComponent<LineRenderer>();
             tracer.enabled = false;
@@ -127,9 +129,12 @@ namespace MotionGun.Editor
 
             SerializedProperty weapons = serializedObject.FindProperty("weapons");
             weapons.arraySize = 3;
-            SetWeapon(weapons.GetArrayElementAtIndex(0), 1, "Pistol", 12, 0.18f, 1.1f, 1f);
-            SetWeapon(weapons.GetArrayElementAtIndex(1), 2, "Burst", 18, 0.11f, 1.35f, 0.8f);
-            SetWeapon(weapons.GetArrayElementAtIndex(2), 3, "Hand Cannon", 6, 0.45f, 1.6f, 2.4f);
+            Transform pistolVisual = CreateWeaponVisual(weaponPivot, weaponVisualsRoot.transform, "PistolVisual", new Color(0.22f, 0.24f, 0.28f, 1f), new Vector3(0.14f, -0.12f, 0.32f), new Vector3(0.04f, -0.24f, 0.1f), new Vector3(0f, 0f, 0.5f), false);
+            Transform burstVisual = CreateWeaponVisual(weaponPivot, weaponVisualsRoot.transform, "BurstVisual", new Color(0.16f, 0.32f, 0.4f, 1f), new Vector3(0.17f, -0.11f, 0.4f), new Vector3(0.05f, -0.24f, 0.11f), new Vector3(0f, 0f, 0.58f), true);
+            Transform handCannonVisual = CreateWeaponVisual(weaponPivot, weaponVisualsRoot.transform, "HandCannonVisual", new Color(0.32f, 0.18f, 0.16f, 1f), new Vector3(0.18f, -0.1f, 0.28f), new Vector3(0.055f, -0.24f, 0.1f), new Vector3(0f, 0f, 0.46f), false);
+            SetWeapon(weapons.GetArrayElementAtIndex(0), 1, "Pistol", 12, 0.18f, 1.1f, 1f, 1, 0.07f, pistolVisual, 0.06f, 9f);
+            SetWeapon(weapons.GetArrayElementAtIndex(1), 2, "Burst", 18, 0.22f, 1.35f, 0.8f, 3, 0.06f, burstVisual, 0.045f, 12f);
+            SetWeapon(weapons.GetArrayElementAtIndex(2), 3, "Hand Cannon", 6, 0.45f, 1.6f, 2.4f, 1, 0.07f, handCannonVisual, 0.1f, 7f);
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -189,7 +194,12 @@ namespace MotionGun.Editor
             int magazineSize,
             float fireInterval,
             float reloadDuration,
-            float damage
+            float damage,
+            int shotsPerTrigger,
+            float burstInterval,
+            Transform weaponVisualRoot,
+            float recoilDistance,
+            float recoilRecoverSpeed
         )
         {
             property.FindPropertyRelative("SlotId").intValue = slotId;
@@ -198,6 +208,85 @@ namespace MotionGun.Editor
             property.FindPropertyRelative("FireInterval").floatValue = fireInterval;
             property.FindPropertyRelative("ReloadDuration").floatValue = reloadDuration;
             property.FindPropertyRelative("Damage").floatValue = damage;
+            property.FindPropertyRelative("ShotsPerTrigger").intValue = shotsPerTrigger;
+            property.FindPropertyRelative("BurstInterval").floatValue = burstInterval;
+            property.FindPropertyRelative("WeaponVisualRoot").objectReferenceValue = weaponVisualRoot;
+            property.FindPropertyRelative("RecoilDistance").floatValue = recoilDistance;
+            property.FindPropertyRelative("RecoilRecoverSpeed").floatValue = recoilRecoverSpeed;
+        }
+
+        private static Transform CreateWeaponVisual(
+            Transform weaponPivot,
+            Transform parent,
+            string name,
+            Color color,
+            Vector3 bodyScale,
+            Vector3 gripLocalPosition,
+            Vector3 barrelLocalPosition,
+            bool addTopRail
+        )
+        {
+            GameObject root = new GameObject(name);
+            root.transform.SetParent(parent, false);
+            root.transform.localPosition = new Vector3(0.22f, -0.18f, 0.42f);
+            root.transform.localRotation = Quaternion.identity;
+
+            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "Body";
+            body.transform.SetParent(root.transform, false);
+            body.transform.localScale = bodyScale;
+            body.transform.localPosition = Vector3.zero;
+            ApplySharedColor(body, color);
+            Object.DestroyImmediate(body.GetComponent<Collider>());
+
+            GameObject barrel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            barrel.name = "Barrel";
+            barrel.transform.SetParent(root.transform, false);
+            barrel.transform.localScale = new Vector3(bodyScale.x * 0.38f, bodyScale.y * 0.55f, bodyScale.z * 0.78f);
+            barrel.transform.localPosition = barrelLocalPosition;
+            ApplySharedColor(barrel, Color.Lerp(color, Color.black, 0.2f));
+            Object.DestroyImmediate(barrel.GetComponent<Collider>());
+
+            GameObject grip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            grip.name = "Grip";
+            grip.transform.SetParent(root.transform, false);
+            grip.transform.localScale = new Vector3(bodyScale.x * 0.28f, bodyScale.y * 1.15f, bodyScale.x * 0.6f);
+            grip.transform.localPosition = gripLocalPosition;
+            grip.transform.localRotation = Quaternion.Euler(18f, 0f, 0f);
+            ApplySharedColor(grip, Color.Lerp(color, Color.black, 0.32f));
+            Object.DestroyImmediate(grip.GetComponent<Collider>());
+
+            if (addTopRail)
+            {
+                GameObject rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                rail.name = "TopRail";
+                rail.transform.SetParent(root.transform, false);
+                rail.transform.localScale = new Vector3(bodyScale.x * 0.72f, bodyScale.y * 0.18f, bodyScale.z * 0.44f);
+                rail.transform.localPosition = new Vector3(0f, bodyScale.y * 0.62f, bodyScale.z * 0.06f);
+                ApplySharedColor(rail, Color.Lerp(color, Color.white, 0.1f));
+                Object.DestroyImmediate(rail.GetComponent<Collider>());
+            }
+
+            GameObject sight = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            sight.name = "Sight";
+            sight.transform.SetParent(root.transform, false);
+            sight.transform.localScale = new Vector3(bodyScale.x * 0.08f, bodyScale.y * 0.16f, bodyScale.x * 0.08f);
+            sight.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            sight.transform.localPosition = new Vector3(0f, bodyScale.y * 0.62f, bodyScale.z * 0.3f);
+            ApplySharedColor(sight, new Color(0.08f, 0.08f, 0.08f, 1f));
+            Object.DestroyImmediate(sight.GetComponent<Collider>());
+
+            root.gameObject.SetActive(false);
+            return root.transform;
+        }
+
+        private static void ApplySharedColor(GameObject target, Color color)
+        {
+            Renderer renderer = target.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial.color = color;
+            }
         }
 
         private static Canvas CreateCanvas()
