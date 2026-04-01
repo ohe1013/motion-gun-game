@@ -79,3 +79,31 @@ class GestureConfig:
     def from_json_file(cls, path: str | Path) -> "GestureConfig":
         with Path(path).open("r", encoding="utf-8") as handle:
             return cls.from_dict(json.load(handle))
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "min_tracking_confidence": self.min_tracking_confidence,
+            "aim_smoothing": self.aim_smoothing,
+            "fire_trigger_threshold": self.fire_trigger_threshold,
+            "fire_release_threshold": self.fire_release_threshold,
+            "fire_cooldown_seconds": self.fire_cooldown_seconds,
+            "reload_window_seconds": self.reload_window_seconds,
+            "reload_vertical_distance": self.reload_vertical_distance,
+            "reload_horizontal_tolerance": self.reload_horizontal_tolerance,
+            "reload_cooldown_seconds": self.reload_cooldown_seconds,
+            "reload_start_margin": self.reload_start_margin,
+            "reload_finish_margin": self.reload_finish_margin,
+            "weapon_hold_seconds": self.weapon_hold_seconds,
+            "slot_mapping": {str(source): target for source, target in self.slot_mapping.items()},
+        }
+        if self.primary_hand_label is not None:
+            payload["primary_hand_label"] = self.primary_hand_label
+        return payload
+
+    def save_json_file(self, path: str | Path) -> Path:
+        resolved = Path(path)
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        with resolved.open("w", encoding="utf-8") as handle:
+            json.dump(self.to_dict(), handle, indent=2)
+            handle.write("\n")
+        return resolved

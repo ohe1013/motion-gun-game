@@ -61,6 +61,24 @@ class GestureEngineTests(unittest.TestCase):
         self.assertEqual(config.weapon_hold_seconds, 0.48)
         self.assertEqual(config.slot_mapping, {1: 2, 2: 3})
 
+    def test_config_can_round_trip_to_json_file(self) -> None:
+        config = GestureConfig(
+            primary_hand_label="Right",
+            min_tracking_confidence=0.61,
+            aim_smoothing=0.42,
+            fire_trigger_threshold=0.63,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = pathlib.Path(temp_dir) / "roundtrip.json"
+            config.save_json_file(config_path)
+            loaded = GestureConfig.from_json_file(config_path)
+
+        self.assertEqual(loaded.primary_hand_label, "Right")
+        self.assertEqual(loaded.min_tracking_confidence, 0.61)
+        self.assertEqual(loaded.aim_smoothing, 0.42)
+        self.assertEqual(loaded.fire_trigger_threshold, 0.63)
+
     def test_fire_requires_release_before_next_shot(self) -> None:
         engine = GestureEngine(GestureConfig())
         primary = hand(label="Right", trigger_curl=0.2)

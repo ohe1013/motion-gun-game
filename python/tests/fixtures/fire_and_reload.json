@@ -1,0 +1,84 @@
+{
+  "frames": [
+    {
+      "timestamp_seconds": 0.0,
+      "hands": [
+        {
+          "label": "Right",
+          "trigger_curl": 0.2,
+          "aim_target": [0.4, 0.45],
+          "palm_center": [0.5, 0.46]
+        },
+        {
+          "label": "Left",
+          "confidence": 0.95,
+          "gun_pose_score": 0.1,
+          "is_gun_pose": false,
+          "finger_count": 0,
+          "palm_center": [0.52, 0.24]
+        }
+      ]
+    },
+    {
+      "timestamp_seconds": 0.1,
+      "hands": [
+        {
+          "label": "Right",
+          "trigger_curl": 0.7,
+          "aim_target": [0.45, 0.43],
+          "palm_center": [0.5, 0.46]
+        },
+        {
+          "label": "Left",
+          "confidence": 0.95,
+          "gun_pose_score": 0.1,
+          "is_gun_pose": false,
+          "finger_count": 0,
+          "palm_center": [0.52, 0.24]
+        }
+      ]
+    },
+    {
+      "timestamp_seconds": 0.2,
+      "hands": [
+        {
+          "label": "Right",
+          "trigger_curl": 0.7,
+          "aim_target": [0.48, 0.42],
+          "palm_center": [0.5, 0.46]
+        },
+        {
+          "label": "Left",
+          "confidence": 0.95,
+          "gun_pose_score": 0.1,
+          "is_gun_pose": false,
+          "finger_count": 0,
+          "palm_center": [0.52, 0.69]
+        }
+      ]
+    }
+  ],
+  "expected_packets": [
+    {
+      "fire": false,
+      "reload": false,
+      "weapon_slot": -1,
+      "primary_hand_detected": true,
+      "secondary_hand_detected": true
+    },
+    {
+      "fire": true,
+      "reload": false,
+      "weapon_slot": -1,
+      "primary_hand_detected": true,
+      "secondary_hand_detected": true
+    },
+    {
+      "fire": false,
+      "reload": true,
+      "weapon_slot": -1,
+      "primary_hand_detected": true,
+      "secondary_hand_detected": true
+    }
+  ]
+}
